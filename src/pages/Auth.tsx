@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { GraduationCap, Mail, Lock, User, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,6 +17,14 @@ export default function Auth() {
   const [name, setName] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, loading, signIn, signUp, signInWithGoogle } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      navigate("/dashboard");
+    }
+  }, [user, loading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,24 +51,86 @@ export default function Auth() {
       return;
     }
 
-    // Simulate auth (replace with Supabase)
-    setTimeout(() => {
-      setIsLoading(false);
+    if (!isLogin && password.length < 6) {
       toast({
-        title: isLogin ? "Welcome back!" : "Account created!",
-        description: isLogin ? "Successfully logged in" : "Please check your email to verify your account",
+        title: "Error",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
       });
-      navigate("/dashboard");
-    }, 1500);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        const { error } = await signIn(email, password);
+        if (error) {
+          toast({
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Welcome back!",
+            description: "Successfully logged in",
+          });
+          navigate("/dashboard");
+        }
+      } else {
+        const { error } = await signUp(email, password, name);
+        if (error) {
+          if (error.message.includes("already registered")) {
+            toast({
+              title: "Error",
+              description: "This email is already registered. Please sign in instead.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Error",
+              description: error.message,
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Account created!",
+            description: "Please check your email to verify your account, or sign in if email confirmation is disabled.",
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleGoogleAuth = () => {
+  const handleGoogleAuth = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    const { error } = await signInWithGoogle();
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
       setIsLoading(false);
-      navigate("/dashboard");
-    }, 1500);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface-sunken">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-sunken p-4">
