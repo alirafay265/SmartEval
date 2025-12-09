@@ -183,12 +183,12 @@ export default function Upload() {
               <CardTitle className="text-sm font-medium">Student (Optional)</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+              <Select value={selectedStudent || "all"} onValueChange={(val) => setSelectedStudent(val === "all" ? "" : val)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select student" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Students</SelectItem>
+                  <SelectItem value="all">All Students</SelectItem>
                   {allStudents.map((student) => (
                     <SelectItem key={student.id} value={student.id}>
                       {student.name} ({student.rollNo})
