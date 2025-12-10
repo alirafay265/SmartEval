@@ -13,11 +13,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Eye, RefreshCw, ClipboardList } from "lucide-react";
-import { useAppStore } from "@/lib/store";
+import { useTests, useSubmissions } from "@/hooks/useSupabaseData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Results() {
   const navigate = useNavigate();
-  const { submissions, tests, updateSubmission } = useAppStore();
+  const { tests } = useTests();
+  const { submissions, loading, updateSubmission } = useSubmissions();
   const [refreshing, setRefreshing] = useState<string | null>(null);
 
   const getTestName = (testId: string) => {
@@ -36,41 +38,20 @@ export default function Results() {
     }
   };
 
-  const simulateAICheck = (submissionId: string) => {
+  const simulateAICheck = async (submissionId: string) => {
     setRefreshing(submissionId);
     
-    // Simulate processing
-    updateSubmission(submissionId, { status: "processing" });
+    await updateSubmission(submissionId, { status: "processing" });
     
-    setTimeout(() => {
-      // Simulate completion with random marks
+    setTimeout(async () => {
       const maxMarks = 100;
-      const marksObtained = Math.floor(Math.random() * 40) + 60; // 60-100
+      const marksObtained = Math.floor(Math.random() * 40) + 60;
       
-      updateSubmission(submissionId, {
+      await updateSubmission(submissionId, {
         status: "completed",
-        marksObtained,
-        maxMarks,
-        results: [
-          {
-            questionId: "q1",
-            extractedAnswer: "Sample extracted answer from OCR",
-            modelAnswer: "Expected model answer",
-            marksAwarded: Math.floor(marksObtained * 0.4),
-            maxMarks: 40,
-            aiExplanation: "Good understanding of core concepts",
-            ocrConfidence: 0.95,
-          },
-          {
-            questionId: "q2",
-            extractedAnswer: "Another extracted response",
-            modelAnswer: "Second model answer",
-            marksAwarded: Math.floor(marksObtained * 0.6),
-            maxMarks: 60,
-            aiExplanation: "Partial credit for methodology",
-            ocrConfidence: 0.88,
-          },
-        ],
+        marks_obtained: marksObtained,
+        max_marks: maxMarks,
+        processed_at: new Date().toISOString(),
       });
       
       setRefreshing(null);
@@ -82,7 +63,20 @@ export default function Results() {
       title="Results"
       description="View and manage AI grading results for all submissions."
     >
-      {submissions.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : submissions.length === 0 ? (
         <Card className="border-2 border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="rounded-full bg-secondary p-4">
@@ -116,20 +110,20 @@ export default function Results() {
               </TableHeader>
               <TableBody>
                 {submissions.map((submission) => {
-                  const percentage = submission.maxMarks
-                    ? Math.round((submission.marksObtained! / submission.maxMarks) * 100)
+                  const percentage = submission.max_marks
+                    ? Math.round((submission.marks_obtained! / submission.max_marks) * 100)
                     : null;
 
                   return (
                     <TableRow key={submission.id}>
                       <TableCell className="font-medium">
-                        {submission.studentName}
+                        {submission.student_name}
                       </TableCell>
-                      <TableCell>{getTestName(submission.testId)}</TableCell>
+                      <TableCell>{getTestName(submission.test_id)}</TableCell>
                       <TableCell>{getStatusBadge(submission.status)}</TableCell>
                       <TableCell className="text-right">
                         {submission.status === "completed"
-                          ? `${submission.marksObtained}/${submission.maxMarks}`
+                          ? `${submission.marks_obtained}/${submission.max_marks}`
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
