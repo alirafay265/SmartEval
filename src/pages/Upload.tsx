@@ -3,7 +3,6 @@ import { useDropzone } from "react-dropzone";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,9 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Upload as UploadIcon, File, X, CheckCircle2, FileText, Image } from "lucide-react";
+import { Upload as UploadIcon, X, CheckCircle2, FileText, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAppStore, Submission } from "@/lib/store";
+import { useTests, useStudentLists, useSubmissions, uploadToStorage } from "@/hooks/useSupabaseData";
+import { useAuth } from "@/hooks/useAuth";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface UploadedFile {
   file: File;
@@ -28,11 +29,15 @@ export default function Upload() {
   const [selectedTest, setSelectedTest] = useState("");
   const [selectedStudent, setSelectedStudent] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { toast } = useToast();
-  const { tests, studentLists, addSubmission } = useAppStore();
+  const { user } = useAuth();
+  const { tests, loading: testsLoading } = useTests();
+  const { studentLists, loading: listsLoading } = useStudentLists();
+  const { addSubmission } = useSubmissions();
 
-  const allStudents = studentLists.flatMap((list) => list.students);
+  const allStudents = studentLists.flatMap((list) => list.students || []);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -48,7 +53,7 @@ export default function Upload() {
       setUploadedFiles((prev) => [...prev, ...newFiles]);
 
       // Simulate upload progress
-      newFiles.forEach((uploadFile, index) => {
+      newFiles.forEach((_, index) => {
         const fileIndex = uploadedFiles.length + index;
         const interval = setInterval(() => {
           setUploadedFiles((prev) => {
@@ -59,21 +64,6 @@ export default function Upload() {
               if (currentFile.progress === 100) {
                 currentFile.status = "completed";
                 clearInterval(interval);
-
-                // Add to store
-                const submission: Submission = {
-                  id: crypto.randomUUID(),
-                  studentId: selectedStudent || crypto.randomUUID(),
-                  studentName:
-                    currentFile.studentName ||
-                    currentFile.file.name.replace(/\.[^/.]+$/, ""),
-                  testId: selectedTest,
-                  fileUrl: URL.createObjectURL(currentFile.file),
-                  fileName: currentFile.file.name,
-                  status: "pending",
-                  uploadedAt: new Date().toISOString(),
-                };
-                addSubmission(submission);
               }
             }
             return updated;
@@ -81,7 +71,7 @@ export default function Upload() {
         }, 200);
       });
     },
-    [selectedStudent, allStudents, uploadedFiles.length, selectedTest, addSubmission]
+    [selectedStudent, allStudents, uploadedFiles.length]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -102,7 +92,7 @@ export default function Upload() {
     return Image;
   };
 
-  const handleUploadAll = () => {
+  const handleUploadAll = async () => {
     if (!selectedTest) {
       toast({
         title: "Error",
@@ -112,11 +102,50 @@ export default function Upload() {
       return;
     }
 
-    toast({
-      title: "Upload complete!",
-      description: `${uploadedFiles.length} files uploaded successfully`,
-    });
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      for (const uploadFile of uploadedFiles.filter(f => f.status === "completed")) {
+        const filePath = `${user.id}/submissions/${selectedTest}/${Date.now()}-${uploadFile.file.name}`;
+        const fileUrl = await uploadToStorage('exam-uploads', filePath, uploadFile.file);
+        
+        await addSubmission({
+          student_id: selectedStudent || null,
+          student_name: uploadFile.studentName || uploadFile.file.name.replace(/\.[^/.]+$/, ""),
+          test_id: selectedTest,
+          file_url: fileUrl,
+          file_name: uploadFile.file.name,
+          status: "pending",
+        });
+      }
+
+      toast({
+        title: "Upload complete!",
+        description: `${uploadedFiles.length} files uploaded successfully`,
+      });
+
+      setUploadedFiles([]);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload files. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
+
+  const loading = testsLoading || listsLoading;
 
   return (
     <DashboardLayout
@@ -131,23 +160,27 @@ export default function Upload() {
               <CardTitle className="text-sm font-medium">Course</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select course" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[...new Set(tests.map((t) => t.courseName))].map((course) => (
-                    <SelectItem key={course} value={course}>
-                      {course}
-                    </SelectItem>
-                  ))}
-                  {tests.length === 0 && (
-                    <SelectItem value="none" disabled>
-                      No courses available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              {loading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...new Set(tests.map((t) => t.course_name))].map((course) => (
+                      <SelectItem key={course} value={course}>
+                        {course}
+                      </SelectItem>
+                    ))}
+                    {tests.length === 0 && (
+                      <SelectItem value="none" disabled>
+                        No courses available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </CardContent>
           </Card>
 
@@ -156,25 +189,29 @@ export default function Upload() {
               <CardTitle className="text-sm font-medium">Test</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedTest} onValueChange={setSelectedTest}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select test" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tests
-                    .filter((t) => !selectedCourse || t.courseName === selectedCourse)
-                    .map((test) => (
-                      <SelectItem key={test.id} value={test.id}>
-                        {test.title}
+              {loading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select value={selectedTest} onValueChange={setSelectedTest}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select test" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tests
+                      .filter((t) => !selectedCourse || t.course_name === selectedCourse)
+                      .map((test) => (
+                        <SelectItem key={test.id} value={test.id}>
+                          {test.title}
+                        </SelectItem>
+                      ))}
+                    {tests.length === 0 && (
+                      <SelectItem value="none" disabled>
+                        No tests available
                       </SelectItem>
-                    ))}
-                  {tests.length === 0 && (
-                    <SelectItem value="none" disabled>
-                      No tests available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </CardContent>
           </Card>
 
@@ -183,19 +220,23 @@ export default function Upload() {
               <CardTitle className="text-sm font-medium">Student (Optional)</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedStudent || "all"} onValueChange={(val) => setSelectedStudent(val === "all" ? "" : val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select student" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Students</SelectItem>
-                  {allStudents.map((student) => (
-                    <SelectItem key={student.id} value={student.id}>
-                      {student.name} ({student.rollNo})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {loading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select value={selectedStudent || "all"} onValueChange={(val) => setSelectedStudent(val === "all" ? "" : val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select student" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Students</SelectItem>
+                    {allStudents.map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.name} ({student.roll_no})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -235,8 +276,8 @@ export default function Upload() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Uploaded Files ({uploadedFiles.length})</CardTitle>
-              <Button onClick={handleUploadAll}>
-                Process All
+              <Button onClick={handleUploadAll} disabled={isProcessing}>
+                {isProcessing ? "Processing..." : "Process All"}
               </Button>
             </CardHeader>
             <CardContent>

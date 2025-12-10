@@ -49,7 +49,7 @@ export default function Index() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
               <GraduationCap className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">ExamCheck AI</span>
+            <span className="text-xl font-bold tracking-tight">SmartEval AI</span>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => navigate("/auth")}>
@@ -204,10 +204,10 @@ export default function Index() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <GraduationCap className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-semibold">ExamCheck AI</span>
+              <span className="font-semibold">SmartEval AI</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              © 2024 ExamCheck AI. All rights reserved.
+              © 2024 SmartEval AI. All rights reserved.
             </p>
           </div>
         </div>

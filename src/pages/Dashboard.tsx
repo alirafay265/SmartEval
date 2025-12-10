@@ -12,7 +12,8 @@ import {
   Clock,
   CheckCircle2,
 } from "lucide-react";
-import { useAppStore } from "@/lib/store";
+import { useTests, useStudentLists, useSubmissions } from "@/hooks/useSupabaseData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const quickActions = [
   {
@@ -43,7 +44,11 @@ const quickActions = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { tests, studentLists, submissions } = useAppStore();
+  const { tests, loading: testsLoading } = useTests();
+  const { studentLists, loading: listsLoading } = useStudentLists();
+  const { submissions, loading: submissionsLoading } = useSubmissions();
+
+  const loading = testsLoading || listsLoading || submissionsLoading;
 
   const stats = [
     {
@@ -88,7 +93,11 @@ export default function Dashboard() {
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{stat.value}</div>
+              {loading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <div className="text-3xl font-bold">{stat.value}</div>
+              )}
               <p className="mt-1 text-xs text-muted-foreground">{stat.change}</p>
             </CardContent>
           </Card>
@@ -130,7 +139,13 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {tests.length === 0 ? (
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : tests.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <FileText className="h-10 w-10 text-muted-foreground/50" />
                 <p className="mt-2 text-sm text-muted-foreground">No tests created yet</p>
@@ -152,10 +167,10 @@ export default function Dashboard() {
                   >
                     <div>
                       <p className="font-medium">{test.title}</p>
-                      <p className="text-sm text-muted-foreground">{test.courseName}</p>
+                      <p className="text-sm text-muted-foreground">{test.course_name}</p>
                     </div>
                     <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium">
-                      {test.examType}
+                      {test.exam_type}
                     </span>
                   </div>
                 ))}
@@ -172,7 +187,13 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {submissions.length === 0 ? (
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : submissions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Upload className="h-10 w-10 text-muted-foreground/50" />
                 <p className="mt-2 text-sm text-muted-foreground">No submissions yet</p>
@@ -193,8 +214,8 @@ export default function Dashboard() {
                     className="flex items-center justify-between rounded-lg border border-border p-3"
                   >
                     <div>
-                      <p className="font-medium">{submission.studentName}</p>
-                      <p className="text-sm text-muted-foreground">{submission.fileName}</p>
+                      <p className="font-medium">{submission.student_name}</p>
+                      <p className="text-sm text-muted-foreground">{submission.file_name}</p>
                     </div>
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${

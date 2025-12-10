@@ -29,12 +29,20 @@ export function Sidebar() {
   const { toast } = useToast();
 
   const handleLogout = async () => {
-    await signOut();
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
-    });
-    navigate("/auth");
+    try {
+      await signOut();
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      });
+      navigate("/");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -45,7 +53,7 @@ export function Sidebar() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
             <GraduationCap className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold tracking-tight">ExamCheck AI</span>
+          <span className="text-lg font-bold tracking-tight">SmartEval AI</span>
         </div>
 
         {/* Navigation */}

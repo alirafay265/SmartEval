@@ -20,20 +20,23 @@ import {
   Cell,
 } from "recharts";
 import { TrendingUp, TrendingDown, Users, Award, Target, BarChart3 } from "lucide-react";
-import { useAppStore } from "@/lib/store";
+import { useTests, useSubmissions } from "@/hooks/useSupabaseData";
 import { useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Analytics() {
-  const { submissions, tests } = useAppStore();
+  const { tests, loading: testsLoading } = useTests();
+  const { submissions, loading: submissionsLoading } = useSubmissions();
   const [selectedTest, setSelectedTest] = useState<string>("all");
 
+  const loading = testsLoading || submissionsLoading;
+
   const filteredSubmissions = submissions.filter(
-    (s) => s.status === "completed" && (selectedTest === "all" || s.testId === selectedTest)
+    (s) => s.status === "completed" && (selectedTest === "all" || s.test_id === selectedTest)
   );
 
-  // Calculate stats
   const scores = filteredSubmissions.map((s) =>
-    s.maxMarks ? Math.round((s.marksObtained! / s.maxMarks) * 100) : 0
+    s.max_marks ? Math.round((s.marks_obtained! / s.max_marks) * 100) : 0
   );
 
   const averageScore = scores.length > 0
@@ -46,7 +49,6 @@ export default function Analytics() {
   const failCount = scores.filter((s) => s < 50).length;
   const passRate = scores.length > 0 ? Math.round((passCount / scores.length) * 100) : 0;
 
-  // Distribution data
   const distributionData = [
     { range: "0-20", count: scores.filter((s) => s >= 0 && s < 20).length },
     { range: "20-40", count: scores.filter((s) => s >= 20 && s < 40).length },
@@ -62,11 +64,10 @@ export default function Analytics() {
 
   const COLORS = ["hsl(0, 0%, 15%)", "hsl(0, 0%, 75%)"];
 
-  // Top scorers
   const topScorers = [...filteredSubmissions]
     .sort((a, b) => {
-      const aPercent = a.maxMarks ? (a.marksObtained! / a.maxMarks) : 0;
-      const bPercent = b.maxMarks ? (b.marksObtained! / b.maxMarks) : 0;
+      const aPercent = a.max_marks ? (a.marks_obtained! / a.max_marks) : 0;
+      const bPercent = b.max_marks ? (b.marks_obtained! / b.max_marks) : 0;
       return bPercent - aPercent;
     })
     .slice(0, 5);
@@ -106,26 +107,42 @@ export default function Analytics() {
       {/* Filter */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Select value={selectedTest} onValueChange={setSelectedTest}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select test" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Tests</SelectItem>
-              {tests.map((test) => (
-                <SelectItem key={test.id} value={test.id}>
-                  {test.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {loading ? (
+            <Skeleton className="h-10 w-[200px]" />
+          ) : (
+            <Select value={selectedTest} onValueChange={setSelectedTest}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select test" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tests</SelectItem>
+                {tests.map((test) => (
+                  <SelectItem key={test.id} value={test.id}>
+                    {test.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <span className="text-sm text-muted-foreground">
             {filteredSubmissions.length} completed submissions
           </span>
         </div>
       </div>
 
-      {filteredSubmissions.length === 0 ? (
+      {loading ? (
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32 w-full" />
+            ))}
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Skeleton className="h-96 w-full" />
+            <Skeleton className="h-96 w-full" />
+          </div>
+        </div>
+      ) : filteredSubmissions.length === 0 ? (
         <Card className="border-2 border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="rounded-full bg-secondary p-4">
@@ -159,7 +176,6 @@ export default function Analytics() {
 
           {/* Charts */}
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Score Distribution */}
             <Card>
               <CardHeader>
                 <CardTitle>Score Distribution</CardTitle>
@@ -196,7 +212,6 @@ export default function Analytics() {
               </CardContent>
             </Card>
 
-            {/* Pass/Fail Ratio */}
             <Card>
               <CardHeader>
                 <CardTitle>Pass/Fail Ratio</CardTitle>
@@ -217,7 +232,7 @@ export default function Analytics() {
                           `${name} ${(percent * 100).toFixed(0)}%`
                         }
                       >
-                        {pieData.map((entry, index) => (
+                        {pieData.map((_, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -246,8 +261,8 @@ export default function Analytics() {
             <CardContent>
               <div className="space-y-3">
                 {topScorers.map((submission, index) => {
-                  const percentage = submission.maxMarks
-                    ? Math.round((submission.marksObtained! / submission.maxMarks) * 100)
+                  const percentage = submission.max_marks
+                    ? Math.round((submission.marks_obtained! / submission.max_marks) * 100)
                     : 0;
 
                   return (
@@ -260,16 +275,16 @@ export default function Analytics() {
                           {index + 1}
                         </div>
                         <div>
-                          <p className="font-medium">{submission.studentName}</p>
+                          <p className="font-medium">{submission.student_name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {tests.find((t) => t.id === submission.testId)?.title || "Unknown Test"}
+                            {tests.find((t) => t.id === submission.test_id)?.title || "Unknown Test"}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold">{percentage}%</p>
                         <p className="text-sm text-muted-foreground">
-                          {submission.marksObtained}/{submission.maxMarks}
+                          {submission.marks_obtained}/{submission.max_marks}
                         </p>
                       </div>
                     </div>
