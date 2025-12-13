@@ -71,7 +71,7 @@ export default function Dashboard() {
     },
     {
       title: "Graded",
-      value: submissions.filter((s) => s.status === "completed").length.toString(),
+      value: submissions.filter((s) => s.status === "graded").length.toString(),
       icon: CheckCircle2,
       change: "Completed",
     },
@@ -219,14 +219,12 @@ export default function Dashboard() {
                     </div>
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        submission.status === "completed"
+                        submission.status === "graded"
                           ? "bg-foreground text-background"
-                          : submission.status === "processing"
-                          ? "bg-secondary"
                           : "bg-muted"
                       }`}
                     >
-                      {submission.status}
+                      {submission.status === "graded" ? "Graded" : "Ungraded"}
                     </span>
                   </div>
                 ))}

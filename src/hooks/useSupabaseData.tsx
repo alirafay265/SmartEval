@@ -200,7 +200,33 @@ export function useSubmissions() {
   }, [fetchSubmissions]);
 
   const addSubmission = async (submissionData: Omit<TablesInsert<'submissions'>, 'user_id'>) => {
-    if (!user) return null;
+    if (!user) {
+      console.error('❌ No user found for submission creation');
+      return null;
+    }
+    
+    // Debug Supabase client state
+    console.log('🔍 Supabase client check:', {
+      hasSupabase: !!supabase,
+      supabaseUrl: supabase?.supabaseUrl,
+      hasAuth: !!supabase?.auth,
+    });
+    
+    // Check current session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('🔑 Current session check:', {
+      hasSession: !!session,
+      sessionError: sessionError?.message,
+      userId: session?.user?.id,
+      accessToken: session?.access_token ? 'present' : 'missing'
+    });
+    
+    console.log('💾 Attempting to insert submission:', {
+      ...submissionData,
+      user_id: user.id,
+      content_preview: submissionData.content ? `${submissionData.content.length} chars` : 'null',
+      questions_preview: submissionData.extracted_questions ? `${submissionData.extracted_questions.length} questions` : 'null'
+    });
     
     const { data, error } = await supabase
       .from('submissions')
@@ -209,10 +235,12 @@ export function useSubmissions() {
       .single();
     
     if (error) {
-      toast({ title: 'Error', description: 'Failed to create submission', variant: 'destructive' });
+      console.error('❌ Submission creation error:', error);
+      toast({ title: 'Error', description: `Failed to create submission: ${error.message}`, variant: 'destructive' });
       return null;
     }
 
+    console.log('✅ Submission created successfully:', data);
     await fetchSubmissions();
     return data;
   };

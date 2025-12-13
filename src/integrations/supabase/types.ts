@@ -194,44 +194,53 @@ export type Database = {
       }
       submissions: {
         Row: {
+          content: string | null
+          extracted_questions: Json | null
           file_name: string
           file_url: string
           id: string
           marks_obtained: number | null
           max_marks: number | null
           processed_at: string | null
+          rubric_criteria: string | null
           status: Database["public"]["Enums"]["submission_status"]
           student_id: string | null
           student_name: string
-          test_id: string
+          test_id: string | null
           uploaded_at: string
           user_id: string
         }
         Insert: {
+          content?: string | null
+          extracted_questions?: Json | null
           file_name: string
           file_url: string
           id?: string
           marks_obtained?: number | null
           max_marks?: number | null
           processed_at?: string | null
+          rubric_criteria?: string | null
           status?: Database["public"]["Enums"]["submission_status"]
           student_id?: string | null
           student_name: string
-          test_id: string
+          test_id?: string | null
           uploaded_at?: string
           user_id: string
         }
         Update: {
+          content?: string | null
+          extracted_questions?: Json | null
           file_name?: string
           file_url?: string
           id?: string
           marks_obtained?: number | null
           max_marks?: number | null
           processed_at?: string | null
+          rubric_criteria?: string | null
           status?: Database["public"]["Enums"]["submission_status"]
           student_id?: string | null
           student_name?: string
-          test_id?: string
+          test_id?: string | null
           uploaded_at?: string
           user_id?: string
         }
@@ -323,7 +332,7 @@ export type Database = {
       app_role: "admin" | "teacher" | "user"
       exam_type: "quiz" | "assignment" | "midterm" | "final"
       question_type: "mcq" | "numeric" | "subjective"
-      submission_status: "pending" | "processing" | "completed"
+      submission_status: "ungraded" | "graded"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -454,7 +463,7 @@ export const Constants = {
       app_role: ["admin", "teacher", "user"],
       exam_type: ["quiz", "assignment", "midterm", "final"],
       question_type: ["mcq", "numeric", "subjective"],
-      submission_status: ["pending", "processing", "completed"],
+      submission_status: ["ungraded", "graded"],
     },
   },
 } as const

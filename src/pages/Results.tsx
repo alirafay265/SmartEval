@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, RefreshCw, ClipboardList } from "lucide-react";
 import { useTests, useSubmissions } from "@/hooks/useSupabaseData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Results() {
   const navigate = useNavigate();
@@ -29,33 +30,55 @@ export default function Results() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "completed":
-        return <Badge variant="default">Completed</Badge>;
-      case "processing":
-        return <Badge variant="secondary">Processing</Badge>;
+      case "graded":
+        return <Badge variant="default">Graded</Badge>;
       default:
-        return <Badge variant="outline">Pending</Badge>;
+        return <Badge variant="outline">Ungraded</Badge>;
     }
   };
 
-  const simulateAICheck = async (submissionId: string) => {
+  const gradeWithAI = async (submissionId: string) => {
     setRefreshing(submissionId);
     
-    await updateSubmission(submissionId, { status: "processing" });
-    
-    setTimeout(async () => {
-      const maxMarks = 100;
-      const marksObtained = Math.floor(Math.random() * 40) + 60;
+    try {
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("No authentication token available");
+      }
       
-      await updateSubmission(submissionId, {
-        status: "completed",
-        marks_obtained: marksObtained,
-        max_marks: maxMarks,
-        processed_at: new Date().toISOString(),
+      // Call backend grading API
+      const response = await fetch(`/api/v1/submissions/${submissionId}/grade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          submission_id: submissionId,
+          use_ai: true,
+        }),
       });
       
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || `Grading failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Grading completed:', result);
+      
+      // The backend should have already updated the submission status to "graded"
+      // We'll refresh the submissions data to get the updated information
+      window.location.reload();
+      
+    } catch (error) {
+      console.error('❌ Grading error:', error);
+      // Status stays as ungraded if grading failed
+      alert(`Grading failed: ${error.message}`);
+    } finally {
       setRefreshing(null);
-    }, 2000);
+    }
   };
 
   return (
@@ -122,7 +145,7 @@ export default function Results() {
                       <TableCell>{getTestName(submission.test_id)}</TableCell>
                       <TableCell>{getStatusBadge(submission.status)}</TableCell>
                       <TableCell className="text-right">
-                        {submission.status === "completed"
+                        {submission.status === "graded"
                           ? `${submission.marks_obtained}/${submission.max_marks}`
                           : "—"}
                       </TableCell>
@@ -131,11 +154,11 @@ export default function Results() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {submission.status === "pending" && (
+                          {submission.status === "ungraded" && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => simulateAICheck(submission.id)}
+                              onClick={() => gradeWithAI(submission.id)}
                               disabled={refreshing === submission.id}
                             >
                               <RefreshCw
@@ -143,10 +166,10 @@ export default function Results() {
                                   refreshing === submission.id ? "animate-spin" : ""
                                 }`}
                               />
-                              Check
+                              Grade with AI
                             </Button>
                           )}
-                          {submission.status === "completed" && (
+                          {submission.status === "graded" && (
                             <Button
                               variant="outline"
                               size="sm"

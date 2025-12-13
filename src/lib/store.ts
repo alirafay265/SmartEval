@@ -40,7 +40,7 @@ export interface Submission {
   testId: string;
   fileUrl: string;
   fileName: string;
-  status: 'pending' | 'processing' | 'completed';
+  status: 'ungraded' | 'graded';
   marksObtained?: number;
   maxMarks?: number;
   results?: QuestionResult[];

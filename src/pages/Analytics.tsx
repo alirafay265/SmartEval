@@ -32,7 +32,7 @@ export default function Analytics() {
   const loading = testsLoading || submissionsLoading;
 
   const filteredSubmissions = submissions.filter(
-    (s) => s.status === "completed" && (selectedTest === "all" || s.test_id === selectedTest)
+    (s) => s.status === "graded" && (selectedTest === "all" || s.test_id === selectedTest)
   );
 
   const scores = filteredSubmissions.map((s) =>
