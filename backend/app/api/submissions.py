@@ -55,7 +55,7 @@ async def get_test_submissions(
                 detail="Test not found"
             )
         
-        if test.created_by != current_user["id"] and current_user["role"] != "admin":
+        if test.user_id != current_user["id"] and current_user["role"] != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -123,7 +123,7 @@ async def get_submission(
         if submission.test_id:
             test = await test_service.get_test_by_id(submission.test_id)
         if (submission.student_email != current_user["email"] and 
-            (not test or test.created_by != current_user["id"]) and 
+            (not test or test.user_id != current_user["id"]) and 
             current_user["role"] not in ["admin", "teacher"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -168,7 +168,7 @@ async def grade_submission(
         test = None
         if submission.test_id:
             test = await test_service.get_test_by_id(submission.test_id)
-            if test and (test.created_by != current_user["id"] and current_user["role"] not in ["admin", "teacher"]):
+            if test and (test.user_id != current_user["id"] and current_user["role"] not in ["admin", "teacher"]):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Access denied"

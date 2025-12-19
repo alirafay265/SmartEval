@@ -154,7 +154,7 @@ export default function Results() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {submission.status === "ungraded" && (
+                          {submission.status !== "graded" && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -169,16 +169,14 @@ export default function Results() {
                               Grade with AI
                             </Button>
                           )}
-                          {submission.status === "graded" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => navigate(`/results/${submission.id}`)}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/results/${submission.id}`)}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

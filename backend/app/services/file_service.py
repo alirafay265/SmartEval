@@ -25,18 +25,48 @@ try:
 except ImportError:
     Image = None
 
-# Completely disable OCR to avoid numpy/multiprocessing conflicts on Windows
-pytesseract = None
+# Advanced vision model for handwriting recognition (primary)
+try:
+    from app.services.vision_model_service import vision_model_service
+    VISION_MODEL_AVAILABLE = vision_model_service.is_available()
+except ImportError:
+    vision_model_service = None
+    VISION_MODEL_AVAILABLE = False
+except Exception:
+    vision_model_service = None
+    VISION_MODEL_AVAILABLE = False
 
-# Uncomment below to enable OCR (requires proper tesseract installation)
-# try:
-#     import pytesseract
-# except ImportError:
-#     pytesseract = None
-# except Exception as e:
-#     # Handle any other import issues (numpy conflicts, etc.)
-#     print(f"OCR disabled due to import error: {e}")
-#     pytesseract = None
+# TrOCR service for handwriting recognition (fallback)
+try:
+    from app.services.trocr_service import trocr_service
+    TROCR_AVAILABLE = trocr_service.is_available()
+except ImportError:
+    trocr_service = None
+    TROCR_AVAILABLE = False
+
+# Fallback to pytesseract if other models not available
+try:
+    import pytesseract
+    # Configure pytesseract to find Tesseract on Windows
+    import platform
+    if platform.system() == 'Windows':
+        # Common Windows installation paths
+        tesseract_paths = [
+            r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+            r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+        ]
+        for path in tesseract_paths:
+            import os
+            if os.path.exists(path):
+                pytesseract.pytesseract.tesseract_cmd = path
+                break
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    pytesseract = None
+    TESSERACT_AVAILABLE = False
+except Exception as e:
+    pytesseract = None
+    TESSERACT_AVAILABLE = False
 
 class FileProcessingService:
     @staticmethod
@@ -51,8 +81,8 @@ class FileProcessingService:
     
     @staticmethod
     def _check_image_support() -> bool:
-        """Check if image processing is available"""
-        return Image is not None and pytesseract is not None
+        """Check if image processing is available (TrOCR preferred, tesseract fallback)"""
+        return Image is not None and (TROCR_AVAILABLE or TESSERACT_AVAILABLE)
     
     @staticmethod
     async def extract_text_from_file(file: UploadFile) -> str:
@@ -79,7 +109,7 @@ class FileProcessingService:
                 if not FileProcessingService._check_image_support():
                     raise HTTPException(
                         status_code=500,
-                        detail="Image processing not available. Please install PIL and pytesseract."
+                        detail="Image OCR not available. TrOCR or pytesseract required."
                     )
                 return FileProcessingService._extract_from_image(content)
             else:
@@ -96,15 +126,16 @@ class FileProcessingService:
 
     @staticmethod
     def _extract_from_pdf(content: bytes) -> str:
-        """Extract text from PDF file using pdfplumber (preferred) or PyPDF2 fallback"""
+        """Extract text from PDF file. Falls back to OCR for scanned/image PDFs."""
         if not pdfplumber and not PyPDF2:
             raise Exception("No PDF processing library available. Please install pdfplumber or PyPDF2.")
+        
+        text = ""
         
         try:
             # Try pdfplumber first (better text extraction)
             if pdfplumber:
                 pdf_file = io.BytesIO(content)
-                text = ""
                 with pdfplumber.open(pdf_file) as pdf:
                     for page in pdf.pages:
                         page_text = page.extract_text()
@@ -119,7 +150,6 @@ class FileProcessingService:
                 pdf_file = io.BytesIO(content)
                 pdf_reader = PyPDF2.PdfReader(pdf_file)
                 
-                text = ""
                 for page in pdf_reader.pages:
                     page_text = page.extract_text()
                     if page_text:
@@ -128,10 +158,89 @@ class FileProcessingService:
                 if text.strip():
                     return text.strip()
             
+            # If no text found, try OCR on PDF pages (for scanned/image PDFs)
+            ocr_text = FileProcessingService._extract_from_pdf_with_ocr(content)
+            if ocr_text and ocr_text.strip():
+                return ocr_text.strip()
+            
             return "No readable text found in PDF"
             
         except Exception as e:
             raise Exception(f"Error extracting from PDF: {str(e)}")
+    
+    @staticmethod
+    def _extract_from_pdf_with_ocr(content: bytes) -> str:
+        """Extract text from PDF by converting pages to images and running OCR"""
+        if not Image:
+            return ""
+        
+        if not TROCR_AVAILABLE and not TESSERACT_AVAILABLE:
+            return ""
+        
+        try:
+            # Try pdf2image if available
+            try:
+                from pdf2image import convert_from_bytes
+                images = convert_from_bytes(content)
+            except ImportError:
+                # Try using pdfplumber to get page images
+                if pdfplumber:
+                    pdf_file = io.BytesIO(content)
+                    images = []
+                    with pdfplumber.open(pdf_file) as pdf:
+                        for page in pdf.pages:
+                            # Convert page to image
+                            img = page.to_image(resolution=150)
+                            images.append(img.original)
+                else:
+                    return ""
+            
+            if not images:
+                return ""
+            
+            # Extract text from each page image
+            all_text = []
+            for i, img in enumerate(images):
+                try:
+                    page_text = FileProcessingService._ocr_image(img)
+                    if page_text.strip():
+                        all_text.append(f"--- Page {i+1} ---\n{page_text}")
+                except Exception:
+                    continue
+            
+            return "\n\n".join(all_text)
+            
+        except Exception as e:
+            print(f"PDF OCR extraction failed: {e}")
+            return ""
+    
+    @staticmethod
+    def _ocr_image(image: Image.Image) -> str:
+        """Run OCR on a PIL Image using advanced vision model with LLM reconstruction"""
+        # Ensure RGB
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Use advanced vision model with LLM reconstruction (best for handwriting)
+        if VISION_MODEL_AVAILABLE and vision_model_service:
+            try:
+                # Use full pipeline: OCR + LLM reconstruction
+                raw_text, reconstructed_text = vision_model_service.extract_and_reconstruct(image)
+                if reconstructed_text.strip():
+                    return reconstructed_text
+                elif raw_text.strip():
+                    return raw_text
+            except Exception as e:
+                print(f"Vision model processing, trying fallback: {e}")
+        
+        # Fallback to TrOCR
+        if TROCR_AVAILABLE and trocr_service:
+            try:
+                return trocr_service.extract_text_from_image_lines(image)
+            except Exception as e:
+                print(f"TrOCR failed: {e}")
+        
+        return ""
 
     @staticmethod
     def _extract_from_docx(content: bytes) -> str:
@@ -461,9 +570,12 @@ class FileProcessingService:
 
     @staticmethod
     def _extract_from_image(content: bytes) -> str:
-        """Extract text from image using OCR"""
-        if not Image or not pytesseract:
-            raise Exception("PIL or pytesseract not available")
+        """Extract text from image using TrOCR (preferred) or Tesseract fallback"""
+        if not Image:
+            raise Exception("PIL not available")
+        
+        if not TROCR_AVAILABLE and not TESSERACT_AVAILABLE:
+            raise Exception("No OCR engine available. Install transformers+torch for TrOCR or pytesseract.")
         
         try:
             image = Image.open(io.BytesIO(content))
@@ -472,15 +584,15 @@ class FileProcessingService:
             if image.mode != 'RGB':
                 image = image.convert('RGB')
             
-            # Use OCR to extract text (requires tesseract installation)
-            text = pytesseract.image_to_string(image, lang='eng')
+            # Use the shared OCR function
+            text = FileProcessingService._ocr_image(image)
             
             if not text.strip():
                 return "No readable text found in image"
             
             return text.strip()
+            
         except Exception as e:
-            # If OCR fails, return a message
             return f"Could not extract text from image: {str(e)}"
 
     @staticmethod

@@ -59,7 +59,7 @@ async def get_test(
             )
         
         # Check if user has access to this test
-        if test.created_by != current_user["id"] and current_user["role"] != "admin":
+        if test.user_id != current_user["id"] and current_user["role"] != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -142,7 +142,7 @@ async def create_question(
     try:
         # Verify test ownership
         test = await test_service.get_test_by_id(test_id)
-        if not test or test.created_by != current_user["id"]:
+        if not test or test.user_id != current_user["id"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -180,7 +180,7 @@ async def get_test_questions(
                 detail="Test not found"
             )
         
-        if test.created_by != current_user["id"] and current_user["role"] != "admin":
+        if test.user_id != current_user["id"] and current_user["role"] != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -212,7 +212,7 @@ async def update_question(
     try:
         # Verify test ownership
         test = await test_service.get_test_by_id(test_id)
-        if not test or test.created_by != current_user["id"]:
+        if not test or test.user_id != current_user["id"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -248,7 +248,7 @@ async def delete_question(
     try:
         # Verify test ownership
         test = await test_service.get_test_by_id(test_id)
-        if not test or test.created_by != current_user["id"]:
+        if not test or test.user_id != current_user["id"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"

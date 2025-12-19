@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Upload as UploadIcon, X, CheckCircle2, FileText, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +32,7 @@ export default function Upload() {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [selectedStudentList, setSelectedStudentList] = useState("");
   const [rubricCriteria, setRubricCriteria] = useState("");
+  const [totalMarks, setTotalMarks] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [bulkUploadStudents, setBulkUploadStudents] = useState<Array<{student: Student, file: File | null}>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -230,6 +232,7 @@ export default function Upload() {
                 submission_id: submissionResult.id,
                 questions: extractedQuestions,
                 rubric_criteria: rubricCriteria || undefined,
+                total_marks: parseInt(totalMarks),
               }),
             });
 
@@ -289,6 +292,15 @@ export default function Upload() {
       return;
     }
 
+    if (!totalMarks || parseInt(totalMarks) <= 0) {
+      toast({
+        title: "Missing Total Marks",
+        description: "Please enter the total marks for grading.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -336,7 +348,7 @@ export default function Upload() {
           content: extractedContent,
           extracted_questions: extractedQuestions,
           rubric_criteria: rubricCriteria || null,
-          status: extractedContent ? "processing" : "pending",
+          status: "ungraded",
           processed_at: extractedContent ? new Date().toISOString() : null,
         });
 
@@ -353,6 +365,7 @@ export default function Upload() {
                 submission_id: bulkSubmissionResult.id,
                 questions: extractedQuestions,
                 rubric_criteria: rubricCriteria || undefined,
+                total_marks: parseInt(totalMarks),
               }),
             });
 
@@ -470,6 +483,24 @@ export default function Upload() {
               />
               <p className="text-xs text-muted-foreground mt-2">
                 This will be sent to the AI for grading if no specific test is selected.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Total Marks <span className="text-red-500">*</span></CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Input
+                type="number"
+                min="1"
+                placeholder="Enter total marks..."
+                value={totalMarks}
+                onChange={(e) => setTotalMarks(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                The maximum marks the exam is graded out of (required).
               </p>
             </CardContent>
           </Card>

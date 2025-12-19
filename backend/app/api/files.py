@@ -5,11 +5,23 @@ from app.models.schemas import (
     BaseResponse, FileUploadResponse, ExamProcessingResponse, 
     ExamGradingRequest, ExamGradingResult, ExamQuestion
 )
-from app.services.file_service import file_processing_service
+from app.services.file_service import file_processing_service, TROCR_AVAILABLE, TESSERACT_AVAILABLE, VISION_MODEL_AVAILABLE
 from app.services.grading_service import get_grading_service
 from datetime import datetime
 import os
 import aiofiles
+
+# Import vision model service for status
+try:
+    from app.services.vision_model_service import vision_model_service
+except ImportError:
+    vision_model_service = None
+
+# Import TrOCR service for status (fallback)
+try:
+    from app.services.trocr_service import trocr_service
+except ImportError:
+    trocr_service = None
 
 router = APIRouter(prefix="/files", tags=["File Processing"])
 
@@ -239,21 +251,42 @@ async def grade_exam_questions(
         if exam_request.submission_id:
             try:
                 from app.services.database_service import submission_service
-                from datetime import datetime
-                await submission_service.update_submission(
-                    exam_request.submission_id, 
-                    {
-                        "status": "graded",
-                        "graded_at": datetime.utcnow().isoformat(),
-                        "marks_obtained": grading_result.total_awarded_marks,
-                        "max_marks": grading_result.total_max_marks,
-                        "total_score": grading_result.overall_percentage,
-                        "graded_by": "ai"
-                    }
+                
+                # Convert grading result to dict for storage
+                grading_result_dict = {
+                    "total_questions": grading_result.total_questions,
+                    "total_max_marks": grading_result.total_max_marks,
+                    "total_awarded_marks": grading_result.total_awarded_marks,
+                    "overall_percentage": grading_result.overall_percentage,
+                    "overall_feedback": grading_result.overall_feedback,
+                    "question_results": [
+                        {
+                            "question_number": qr.question_number,
+                            "question": qr.question,
+                            "student_answer": qr.student_answer,
+                            "max_marks": qr.max_marks,
+                            "awarded_marks": qr.awarded_marks,
+                            "feedback": qr.feedback,
+                            "percentage": qr.percentage
+                        }
+                        for qr in grading_result.question_results
+                    ]
+                }
+                
+                # Use new save_grading_results method to save full details
+                # LLM confidence is estimated based on successful API call
+                llm_confidence = 0.85  # Default confidence for successful grading
+                
+                await submission_service.save_grading_results(
+                    submission_id=exam_request.submission_id,
+                    grading_result=grading_result_dict,
+                    llm_confidence=llm_confidence
                 )
-                print(f"✅ Updated submission {exam_request.submission_id} status to graded")
+                print(f"✅ Saved full grading results for submission {exam_request.submission_id}")
             except Exception as update_error:
-                print(f"⚠️ Failed to update submission status: {update_error}")
+                print(f"⚠️ Failed to save grading results: {update_error}")
+                import traceback
+                traceback.print_exc()
                 # Don't fail the entire request if status update fails
         
         return BaseResponse(
@@ -281,4 +314,29 @@ async def get_supported_formats():
         success=True,
         message="Supported file formats retrieved successfully",
         data=supported_formats
+    )
+
+@router.get("/ocr-status", response_model=BaseResponse)
+async def get_ocr_status():
+    """Get OCR engine status and capabilities"""
+    status_info = {
+        "vision_model_available": VISION_MODEL_AVAILABLE,
+        "trocr_available": TROCR_AVAILABLE,
+        "tesseract_available": TESSERACT_AVAILABLE,
+        "primary_engine": "VisionOCR-v1" if VISION_MODEL_AVAILABLE else ("TrOCR" if TROCR_AVAILABLE else ("Tesseract" if TESSERACT_AVAILABLE else "None")),
+        "handwriting_support": VISION_MODEL_AVAILABLE or TROCR_AVAILABLE,
+        "image_formats": ["jpg", "jpeg", "png"],
+        "pdf_ocr": VISION_MODEL_AVAILABLE or TROCR_AVAILABLE or TESSERACT_AVAILABLE,
+    }
+    
+    # Add model details
+    if VISION_MODEL_AVAILABLE and vision_model_service:
+        status_info["model_details"] = vision_model_service.get_status()
+    elif trocr_service:
+        status_info["model_details"] = trocr_service.get_status()
+    
+    return BaseResponse(
+        success=True,
+        message="OCR status retrieved successfully",
+        data=status_info
     )

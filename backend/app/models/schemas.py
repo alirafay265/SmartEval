@@ -35,6 +35,10 @@ class Token(BaseModel):
 # Test Models
 class TestBase(BaseModel):
     title: str
+    course_name: Optional[str] = None
+    exam_type: Optional[str] = "midterm"
+    test_file_url: Optional[str] = None
+    # Legacy fields for backward compatibility
     description: Optional[str] = None
     subject: Optional[str] = None
     max_score: float = 100.0
@@ -46,18 +50,33 @@ class TestCreate(TestBase):
 
 class TestUpdate(BaseModel):
     title: Optional[str] = None
+    course_name: Optional[str] = None
+    exam_type: Optional[str] = None
+    test_file_url: Optional[str] = None
     description: Optional[str] = None
     subject: Optional[str] = None
     max_score: Optional[float] = None
     time_limit: Optional[int] = None
     instructions: Optional[str] = None
 
-class TestResponse(TestBase):
+class TestResponse(BaseModel):
     id: str
-    created_by: str
+    title: str
+    user_id: str
+    course_name: Optional[str] = None
+    exam_type: Optional[str] = None
+    test_file_url: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    # Legacy fields for backward compatibility
+    description: Optional[str] = None
+    subject: Optional[str] = None
+    max_score: Optional[float] = 100.0
+    time_limit: Optional[int] = None
+    instructions: Optional[str] = None
     is_active: bool = True
+    
+    model_config = {"from_attributes": True}
 
 # Question Models
 class QuestionBase(BaseModel):
@@ -185,6 +204,7 @@ class ExamGradingRequest(BaseModel):
     questions: List[ExamQuestion]
     rubric_criteria: Optional[str] = None
     test_questions: Optional[List[str]] = None  # Questions from the test if test_id is provided
+    total_marks: Optional[int] = None  # Total marks the exam is graded out of
 
 class QuestionGradingResult(BaseModel):
     question_number: int

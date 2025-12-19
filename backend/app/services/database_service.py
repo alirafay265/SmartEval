@@ -109,7 +109,7 @@ class TestService:
         try:
             # Check if user owns the test
             existing_test = await TestService.get_test_by_id(test_id)
-            if not existing_test or existing_test.created_by != user_id:
+            if not existing_test or existing_test.user_id != user_id:
                 return None
             
             update_data = test_data.dict(exclude_unset=True)
@@ -129,7 +129,7 @@ class TestService:
         try:
             # Check if user owns the test
             existing_test = await TestService.get_test_by_id(test_id)
-            if not existing_test or existing_test.created_by != user_id:
+            if not existing_test or existing_test.user_id != user_id:
                 return False
             
             # Soft delete by setting is_active to False
@@ -266,6 +266,68 @@ class SubmissionService:
             
         except Exception as e:
             raise Exception(f"Error grading submission: {str(e)}")
+
+    @staticmethod
+    async def save_grading_results(
+        submission_id: str, 
+        grading_result: dict,
+        llm_confidence: float = None,
+        ocr_confidence: float = None
+    ) -> Optional[SubmissionResponse]:
+        """Save full grading results to submission and question_results table"""
+        import json
+        try:
+            # Prepare update data for submission
+            update_data = {
+                "status": "graded",
+                "graded_at": datetime.utcnow().isoformat(),
+                "graded_by": "ai",
+                "marks_obtained": grading_result.get("total_awarded_marks", 0),
+                "max_marks": grading_result.get("total_max_marks", 0),
+                "total_score": grading_result.get("overall_percentage", 0),
+                "overall_feedback": grading_result.get("overall_feedback", ""),
+                "grading_results": grading_result,  # Store full result as JSONB
+            }
+            
+            # Add confidence scores if provided
+            if llm_confidence is not None:
+                update_data["llm_confidence"] = llm_confidence
+            if ocr_confidence is not None:
+                update_data["ocr_confidence"] = ocr_confidence
+            
+            # Update submission
+            result = db.table("submissions").update(update_data).eq("id", submission_id).execute()
+            print(f"✅ Saved grading results to submission {submission_id}", flush=True)
+            
+            # Save individual question results to question_results table
+            question_results = grading_result.get("question_results", [])
+            if question_results:
+                for qr in question_results:
+                    # Only include columns that exist in the table
+                    question_result_data = {
+                        "submission_id": submission_id,
+                        "question_number": qr.get("question_number", 0),
+                        "extracted_answer": qr.get("student_answer", ""),
+                        "marks_awarded": qr.get("awarded_marks", 0),
+                        "max_marks": qr.get("max_marks", 0),
+                        "ai_explanation": qr.get("feedback", ""),
+                    }
+                    
+                    try:
+                        db.table("question_results").insert(question_result_data).execute()
+                    except Exception as qr_error:
+                        print(f"⚠️ Failed to save question result: {qr_error}", flush=True)
+                        # Continue with other questions even if one fails
+                
+                print(f"✅ Saved {len(question_results)} question results for submission {submission_id}", flush=True)
+            
+            if result.data:
+                return SubmissionResponse(**result.data[0])
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error saving grading results: {str(e)}", flush=True)
+            raise Exception(f"Error saving grading results: {str(e)}")
 
 # Create service instances
 user_service = UserService()

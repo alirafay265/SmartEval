@@ -45,7 +45,9 @@ export type Database = {
           extracted_answer: string | null
           id: string
           marks_awarded: number
+          max_marks: number
           ocr_confidence: number | null
+          llm_confidence: number | null
           question_id: string
           submission_id: string
         }
@@ -55,7 +57,9 @@ export type Database = {
           extracted_answer?: string | null
           id?: string
           marks_awarded?: number
+          max_marks?: number
           ocr_confidence?: number | null
+          llm_confidence?: number | null
           question_id: string
           submission_id: string
         }
@@ -65,7 +69,9 @@ export type Database = {
           extracted_answer?: string | null
           id?: string
           marks_awarded?: number
+          max_marks?: number
           ocr_confidence?: number | null
+          llm_confidence?: number | null
           question_id?: string
           submission_id?: string
         }
@@ -209,6 +215,12 @@ export type Database = {
           test_id: string | null
           uploaded_at: string
           user_id: string
+          llm_confidence: number | null
+          ocr_confidence: number | null
+          overall_feedback: string | null
+          graded_at: string | null
+          graded_by: string | null
+          grading_results: Json | null
         }
         Insert: {
           content?: string | null
@@ -226,6 +238,12 @@ export type Database = {
           test_id?: string | null
           uploaded_at?: string
           user_id: string
+          llm_confidence?: number | null
+          ocr_confidence?: number | null
+          overall_feedback?: string | null
+          graded_at?: string | null
+          graded_by?: string | null
+          grading_results?: Json | null
         }
         Update: {
           content?: string | null
@@ -243,6 +261,12 @@ export type Database = {
           test_id?: string | null
           uploaded_at?: string
           user_id?: string
+          llm_confidence?: number | null
+          ocr_confidence?: number | null
+          overall_feedback?: string | null
+          graded_at?: string | null
+          graded_by?: string | null
+          grading_results?: Json | null
         }
         Relationships: [
           {

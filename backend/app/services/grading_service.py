@@ -219,16 +219,39 @@ Please return your response in the following JSON format:
             total_max_marks = 0
             total_awarded_marks = 0
             
+            # If total_marks is provided, distribute it evenly across questions
+            # Otherwise, use the max_marks from each question
+            num_questions = len(exam_request.questions)
+            override_max_marks = None
+            
+            if exam_request.total_marks and exam_request.total_marks > 0 and num_questions > 0:
+                # Distribute total marks evenly across questions
+                override_max_marks = exam_request.total_marks / num_questions
+                total_max_marks = exam_request.total_marks
+            
             for question in exam_request.questions:
+                # Use override marks if total_marks was specified, otherwise use question's max_marks
+                effective_max_marks = override_max_marks if override_max_marks else question.max_marks
+                
+                # Create a modified question with the effective max marks
+                grading_question = ExamQuestion(
+                    question_number=question.question_number,
+                    question=question.question,
+                    student_answer=question.student_answer,
+                    max_marks=effective_max_marks,
+                    question_type=question.question_type
+                )
+                
                 # Grade each question individually
                 question_result = await self._grade_individual_question(
-                    question, 
+                    grading_question, 
                     rubric_criteria=exam_request.rubric_criteria,
                     test_questions=exam_request.test_questions
                 )
                 question_results.append(question_result)
                 
-                total_max_marks += question.max_marks
+                if not override_max_marks:
+                    total_max_marks += question.max_marks
                 total_awarded_marks += question_result.awarded_marks
             
             # Calculate overall percentage
@@ -303,6 +326,11 @@ Grading Guidelines:
 - Award marks between 0 and {question.max_marks}
 {f"- Follow the provided rubric criteria above when grading" if rubric_criteria else ""}"""
 
+            print(f"\n🎓 GRADING QUESTION {question.question_number}")
+            print(f"   Question: {question.question[:100]}...")
+            print(f"   Answer: {question.student_answer[:100]}...")
+            print(f"   Max Marks: {question.max_marks}")
+            
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -321,12 +349,16 @@ Grading Guidelines:
             )
             
             response_content = completion.choices[0].message.content or ""
+            print(f"   📝 LLM Response: {response_content}")
             result = self._parse_question_grading_response(response_content, question)
+            print(f"   ✅ Parsed Result: {result.awarded_marks}/{question.max_marks} marks")
             
             return result
             
         except Exception as e:
-            print(f"Error grading question {question.question_number}: {e}")
+            print(f"❌ Error grading question {question.question_number}: {e}")
+            import traceback
+            traceback.print_exc()
             # Return a default result in case of error
             return QuestionGradingResult(
                 question_number=question.question_number,

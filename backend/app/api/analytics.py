@@ -22,7 +22,7 @@ async def get_test_analytics(
                 detail="Test not found"
             )
         
-        if test.created_by != current_user["id"] and current_user["role"] != "admin":
+        if test.user_id != current_user["id"] and current_user["role"] != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
